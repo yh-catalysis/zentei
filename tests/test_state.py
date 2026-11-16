@@ -209,3 +209,30 @@ def test_apply_dry_run_writes_nothing(data):
         == 0
     )
     assert store.read_events(data) == []
+
+
+def test_find_ranks_records_by_how_many_words_they_contain(data, capsys):
+    items = [
+        {"type": "premise.added", "data": premise("pre_clock-fast", statement="The VM clock runs fast")},
+        {"type": "premise.added", "data": premise("pre_clock-slow", statement="The host clock is slow", scope="a/b")},
+        {"type": "decision.added", "data": decision("dec_use-wall-clock", [{"on": "pre_clock-fast"}])},
+    ]
+    assert cli.main(["apply", write(data / "in.json", items)]) == 0
+    capsys.readouterr()
+    assert cli.main(["find", "CLOCK", "fast", "unrelated"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert "pre_clock-fast" in lines[0] and len(lines) == 3
+    assert cli.main(["find", "slow", "--limit", "1"]) == 0
+    assert "pre_clock-slow" in capsys.readouterr().out
+    assert cli.main(["find", "clock", "--scope", "a/b"]) == 0
+    assert len(capsys.readouterr().out.splitlines()) == 1
+    assert cli.main(["find", "nothing-like-this"]) == 0
+
+
+def test_context_points_to_shared_premises_in_a_repository_without_records(data, capsys):
+    assert cli.main(["context", "--scope", "x/y"]) == 0
+    assert capsys.readouterr().out == ""
+    assert cli.main(["apply", write(data / "in.json", [{"type": "premise.added", "data": premise("pre_a")}])]) == 0
+    capsys.readouterr()
+    assert cli.main(["context", "--scope", "x/y"]) == 0
+    assert "zentei find" in capsys.readouterr().out
