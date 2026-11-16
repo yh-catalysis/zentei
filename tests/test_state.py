@@ -63,6 +63,8 @@ def test_status_before_any_check_follows_as_of():
     state = fold(BASE)
     assert state.premises["pre_a"].status == "holds"
     assert state.premises["pre_c"].status == "unverified"
+    policy = fold([ev(1, "premise.added", premise("pre_v", kind="value", as_of=None))])
+    assert policy.premises["pre_v"].status == "holds"
     assert impact(state) == []
 
 

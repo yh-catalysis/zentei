@@ -108,7 +108,8 @@ def apply(state: State, event: Event) -> None:
     p = event.payload()
     match p:
         case Premise():
-            state.premises[p.id] = PremiseState(p, "holds" if p.as_of else "unverified", p.evidence)
+            verified = p.as_of is not None or p.kind == "value"
+            state.premises[p.id] = PremiseState(p, "holds" if verified else "unverified", p.evidence)
         case Decision():
             state.decisions[p.id] = DecisionState(p)
         case PremiseChecked():
