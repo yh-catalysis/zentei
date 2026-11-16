@@ -221,6 +221,21 @@ def _date(value: str | None) -> str | None:
         return None
 
 
+def _dependencies_first(decisions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Order decisions so that one that another in the same document rests on comes first.
+
+    A document may state a conclusion before the decisions it builds on. A cycle keeps its
+    original order, and is then reported as a dependency on an unknown record.
+    """
+    pending = {d["id"]: d for d in decisions}
+    ordered: list[dict[str, Any]] = []
+    while pending:
+        ready = [d for d in pending.values() if not any(dep["on"] in pending for dep in d["depends_on"])]
+        for d in ready or list(pending.values()):
+            ordered.append(pending.pop(d["id"]))
+    return ordered
+
+
 def to_events(output: dict[str, Any], source: Source, state: st.State, extractor: str) -> Result:
     """Turn model output into events, checked one by one against a copy of the state."""
     result = Result()
@@ -255,7 +270,7 @@ def to_events(output: dict[str, Any], source: Source, state: st.State, extractor
             "as_of": fallback if p["verified"] else None,
         }
         add("premise.added", data, "user" if p["stated_by_user"] else None)
-    for d in output.get("decisions", []):
+    for d in _dependencies_first(output.get("decisions", [])):
         section = f"#{d['section']}" if d["section"] else ""
         data = {
             "id": d["id"],

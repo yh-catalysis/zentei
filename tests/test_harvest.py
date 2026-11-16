@@ -94,3 +94,16 @@ def test_ledger_skips_unchanged_files(tmp_path, monkeypatch):
     assert not hv.Ledger(tmp_path / "data").is_new(src)
     src.path.write_text("changed", encoding="utf-8")
     assert hv.Ledger(tmp_path / "data").is_new(src)
+
+
+def test_a_decision_may_rest_on_one_stated_later_in_the_same_document(tmp_path):
+    out = output()
+    later = output()["decisions"][0] | {"id": "dec_r-y"}
+    out["decisions"][0]["depends_on"].append(
+        {"on": "dec_r-y", "role": "supports", "alternative": None, "strength": "contributing"}
+    )
+    out["decisions"].append(later)
+    result = hv.to_events(out, source(tmp_path), fold([]), "m")
+    assert result.errors == []
+    assert [e.data["id"] for e in result.events if e.type == "decision.added"] == ["dec_r-y", "dec_r-x"]
+    assert fold(result.events).warnings == []
