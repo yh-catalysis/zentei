@@ -10,6 +10,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from zentei import harvest as hv
 from zentei import state as st
 from zentei import store
 from zentei.model import Event
@@ -147,29 +148,66 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 
 def cmd_context(args: argparse.Namespace) -> int:
-    """A summary for a coding agent to read at the start of work in one repository."""
+    """A short summary for a coding agent to read at the start of work in one repository.
+
+    It lists what needs attention and what other repositories share, not every record:
+    the full list would cost attention at the start of every session.
+    """
     _, state = _load(store.data_dir())
     premises, decisions = st.in_scope(state, args.scope)
     if not premises and not decisions:
         return 0
-    findings = [f for f in st.impact(state) if f.decision.scope == args.scope]
+    active = [ds.decision for ds in decisions if ds.status == "active"]
     print(f"# このリポジトリの判断が依拠している前提（{args.scope}）\n")
-    print("作業中に、下の前提と食い違う情報に気づいたら、利用者に知らせること。\n")
+    print(f"判断 {len(active)} 件、前提 {len(premises)} 件の記録がある。")
+    print("作業中に、前提と食い違う情報に気づいたら利用者に知らせること。")
+    print(f"全件は `zentei list --scope {args.scope}` で出る。")
+    print("ある前提が崩れたときの影響は `zentei impact <前提の id>` で出る。\n")
+    findings = [f for f in st.impact(state) if f.decision.scope == args.scope]
     if findings:
         _print_findings(state, findings)
-    print("## 前提\n")
-    order = {"broken": 0, "unverified": 1, "holds": 2}
-    for ps in sorted(premises, key=lambda ps: (order[ps.status], ps.premise.id)):
-        print(_premise_line(ps))
-    active = [ds.decision for ds in decisions if ds.status == "active"]
-    print("\n## 判断\n")
-    for d in sorted(active, key=lambda d: d.id):
-        print(f"- `{d.id}` {d.title}: {d.chosen}")
-        for dep in state.dependencies(d):
-            mark = "却下の根拠" if dep.role == "rules_out" else ("要" if dep.strength == "critical" else "根拠")
-            suffix = f"（案: {dep.alternative}）" if dep.alternative else ""
-            print(f"  - {mark}: `{dep.on}`{suffix}")
+    critical = {dep.on for d in active for dep in state.dependencies(d) if dep.strength == "critical"}
+    groups = [
+        ("確かめていない前提", lambda ps: ps.status == "unverified"),
+        ("崩れたら判断の見直しが要る前提", lambda ps: ps.status == "holds" and ps.premise.id in critical),
+    ]
+    for title, pick in groups:
+        chosen = sorted((ps for ps in premises if pick(ps)), key=lambda ps: ps.premise.id)[: args.limit]
+        if chosen:
+            print(f"## {title}\n")
+            print("\n".join(_premise_line(ps) for ps in chosen) + "\n")
     return 0
+
+
+def cmd_harvest(args: argparse.Namespace) -> int:
+    """Read each new or changed file, and write what was extracted from it before moving to the next."""
+    root = store.data_dir()
+    ledger = hv.Ledger(root)
+    run = hv.claude_runner(args.model)
+    failed = 0
+    for name in args.files:
+        source = hv.make_source(Path(name), args.scope, args.kind, args.date)
+        if not args.force and not ledger.is_new(source):
+            print(f"済み  {source.ref}")
+            continue
+        _, state = _load(root)
+        try:
+            result = hv.extract(source, state, run, args.model)
+        except (RuntimeError, OSError, ValueError, KeyError) as e:
+            failed += 1
+            print(f"失敗  {source.ref}: {e}", file=sys.stderr)
+            continue
+        if result.errors:
+            failed += 1
+            print(f"失敗  {source.ref}: " + " / ".join(result.errors[:3]), file=sys.stderr)
+            continue
+        if not args.dry_run:
+            store.append_events(root, result.events)
+            ledger.record(source, result.questions)
+        added = [e.type.split(".")[0] for e in result.events]
+        counts = f"前提 {added.count('premise')} / 判断 {added.count('decision')} / 質問 {len(result.questions)}"
+        print(f"取込  {source.ref}: {counts}")
+    return 1 if failed else 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -198,7 +236,18 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("context", help="エージェントに読ませる、リポジトリごとの要約")
     p.add_argument("--scope", required=True, help="owner/name")
+    p.add_argument("--limit", type=int, default=30, help="見出しごとの件数の上限")
     p.set_defaults(func=cmd_context)
+
+    p = sub.add_parser("harvest", help="意思決定ドキュメントやメモリから、前提と判断を抜き出して取り込む")
+    p.add_argument("files", nargs="+")
+    p.add_argument("--scope", required=True, help="owner/name")
+    p.add_argument("--kind", choices=["doc", "memory"], required=True)
+    p.add_argument("--model", default="haiku")
+    p.add_argument("--date", type=date.fromisoformat, help="文書の日付。省くと、Git の履歴やメモリの更新日から取る")
+    p.add_argument("--force", action="store_true", help="読んだことのある文書も読み直す")
+    p.add_argument("--dry-run", action="store_true")
+    p.set_defaults(func=cmd_harvest)
 
     args = parser.parse_args(argv)
     return args.func(args)
