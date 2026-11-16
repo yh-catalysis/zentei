@@ -4,7 +4,19 @@
 
 記録は人が手で書きません。コーディングエージェントとの会話と、既存の意思決定ドキュメントから抜き出します。
 
-まだ設計の段階で、動くものはありません。
+記録の形は [docs/01_Data_Model_Decision.md](docs/01_Data_Model_Decision.md) にあります。会話やドキュメントから抜き出す部分は、まだありません。
+
+## 使い方
+
+```bash
+zentei apply events.json      # イベントを検証して取り込む
+zentei list                   # 前提と判断の一覧
+zentei impact pre_some-fact   # この前提が崩れたら、どの判断の見直しが要るか
+zentei check pre_some-fact broken --evidence "…"
+zentei context --scope owner/name   # エージェントに読ませる要約
+```
+
+記録は `~/.local/share/zentei`（`ZENTEI_DATA` で変更可）の `events/<マシン名>/` に追記されます。
 
 ## 開発
 
