@@ -13,7 +13,7 @@ from pydantic import ValidationError
 from zentei import harvest as hv
 from zentei import state as st
 from zentei import store
-from zentei.model import Event
+from zentei.model import GLOBAL, Event
 
 STATUS_LABEL = {"holds": "成立", "broken": "崩れた", "unverified": "未確認"}
 
@@ -155,14 +155,21 @@ def cmd_context(args: argparse.Namespace) -> int:
     """
     _, state = _load(store.data_dir())
     premises, decisions = st.in_scope(state, args.scope)
-    if not premises and not decisions:
+    shared = sum(1 for ps in state.premises.values() if ps.premise.scope == GLOBAL)
+    if not premises and not decisions and not shared:
         return 0
     active = [ds.decision for ds in decisions if ds.status == "active"]
     print(f"# このリポジトリの判断が依拠している前提（{args.scope}）\n")
     print(f"判断 {len(active)} 件、前提 {len(premises)} 件の記録がある。")
     print("作業中に、前提と食い違う情報に気づいたら利用者に知らせること。")
-    print(f"全件は `zentei list --scope {args.scope}` で出る。")
-    print("ある前提が崩れたときの影響は `zentei impact <前提の id>` で出る。\n")
+    if premises or decisions:
+        print(f"全件は `zentei list --scope {args.scope}` で出る。")
+        print("ある前提が崩れたときの影響は `zentei impact <前提の id>` で出る。")
+    print(f"ほかのリポジトリで確かめた、この利用者の環境やサービスについての前提が {shared} 件ある。")
+    print("技術的な方針や設計を答える前に、`zentei find <言葉>...` を1回実行すること。")
+    print("言葉は、話題に出てくる環境・サービス・道具・関数の名前を3〜6語並べる。")
+    print("例: `zentei find docker postgres healthcheck compose`")
+    print("どれかを含む記録が、多く含む順に出る。\n")
     findings = [f for f in st.impact(state) if f.decision.scope == args.scope]
     if findings:
         _print_findings(state, findings)
@@ -176,6 +183,38 @@ def cmd_context(args: argparse.Namespace) -> int:
         if chosen:
             print(f"## {title}\n")
             print("\n".join(_premise_line(ps) for ps in chosen) + "\n")
+    return 0
+
+
+def cmd_find(args: argparse.Namespace) -> int:
+    """Records whose id or text contains any of the words, those containing more of them first.
+
+    Whoever searches does not know how a record was worded, so a record is not required
+    to contain every word.
+    """
+    _, state = _load(store.data_dir())
+    words = {w.casefold() for w in args.words}
+
+    def hits(*texts: str | None) -> int:
+        text = " ".join(t for t in texts if t).casefold()
+        return sum(w in text for w in words)
+
+    found: list[tuple[int, str, str]] = []
+    for ps in state.premises.values():
+        p = ps.premise
+        if (not args.scope or p.scope == args.scope) and (n := hits(p.id, p.statement, p.breaks_when)):
+            found.append((-n, p.id, f"{_premise_line(ps)} [{p.scope}]"))
+    for ds in state.decisions.values():
+        d = ds.decision
+        if (not args.scope or d.scope == args.scope) and (n := hits(d.id, d.title, d.chosen)):
+            found.append((-n, d.id, f"- [判断] `{d.id}` [{d.scope}] {d.title}: {d.chosen}"))
+    if not found:
+        print("該当する記録はありません")
+        return 0
+    found.sort()
+    print("\n".join(line for _, _, line in found[: args.limit]))
+    if len(found) > args.limit:
+        print(f"ほかに {len(found) - args.limit} 件あります。言葉を足すか、--limit を上げてください")
     return 0
 
 
@@ -238,6 +277,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--scope", required=True, help="owner/name")
     p.add_argument("--limit", type=int, default=30, help="見出しごとの件数の上限")
     p.set_defaults(func=cmd_context)
+
+    p = sub.add_parser("find", help="言葉で前提と判断を探す（多くの言葉を含むものから順に出す）")
+    p.add_argument("words", nargs="+")
+    p.add_argument("--scope", help="owner/name、または global")
+    p.add_argument("--limit", type=int, default=20, help="件数の上限")
+    p.set_defaults(func=cmd_find)
 
     p = sub.add_parser("harvest", help="意思決定ドキュメントやメモリから、前提と判断を抜き出して取り込む")
     p.add_argument("files", nargs="+")

@@ -13,6 +13,7 @@ zentei apply events.json      # イベントを検証して取り込む
 zentei list                   # 前提と判断の一覧
 zentei impact pre_some-fact   # この前提が崩れたら、どの判断の見直しが要るか
 zentei check pre_some-fact broken --evidence "…"
+zentei find 言葉 …            # 言葉を含む前提と判断を、リポジトリをまたいで探す
 zentei context --scope owner/name   # エージェントに読ませる要約
 ```
 
