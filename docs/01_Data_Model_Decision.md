@@ -56,7 +56,7 @@ zentei は、判断ごとに依拠した前提を記録し、前提が崩れた�
 | `as_of` | 成り立つことを確かめた日。確かめていなければ空 |
 | `evidence` | 根拠（URL、ファイル、計測の方法）。無くてもよい |
 
-状態（`holds`・`broken`・`unverified`）は項目として持たず、確認のイベント（[§9](#9-保存の形)）から決める。確認のイベントが無いときは、`as_of` があれば `holds`、無ければ `unverified` とする。「たしか〜だったはず」のように、確かめずに述べられた前提は `unverified` で入る。
+状態（`holds`・`broken`・`unverified`）は項目として持たず、確認のイベント（[§9](#9-保存の形)）から決める。確認のイベントが無いときは、`as_of` があれば `holds`、無ければ `unverified` とする。`value` は確かめる対象ではないので、`as_of` が無くても `holds` とする。「たしか〜だったはず」のように、確かめずに述べられた前提は `unverified` で入る。
 
 | `kind` | 中身 | 確かめ方 |
 | --- | --- | --- |
@@ -208,4 +208,5 @@ zentei は、判断ごとに依拠した前提を記録し、前提が崩れた�
 | --- | --- | --- |
 | 2026-11-17 | 本ドキュメントを提案として作成 | [#1](https://github.com/yh-catalysis/zentei/issues/1) |
 | 2026-11-17 | ID を短い名前にし、確認のイベントが無いときの状態を決めた（§4）。本ドキュメントの内容で確定 | [#1](https://github.com/yh-catalysis/zentei/issues/1) |
+| 2026-11-17 | `value` の前提は、確かめた日が無くても `holds` とした（§4） | [#6](https://github.com/yh-catalysis/zentei/issues/6) |
 | 2026-11-17 | 予想と確信度を最初の版から外した（§8） | [#1](https://github.com/yh-catalysis/zentei/issues/1) |
