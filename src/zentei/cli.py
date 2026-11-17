@@ -153,6 +153,9 @@ def cmd_context(args: argparse.Namespace) -> int:
     It lists what needs attention and what other repositories share, not every record:
     the full list would cost attention at the start of every session.
     """
+    args.scope = args.scope or store.scope_of(Path.cwd())
+    if not args.scope:
+        return 0
     _, state = _load(store.data_dir())
     premises, decisions = st.in_scope(state, args.scope)
     shared = sum(1 for ps in state.premises.values() if ps.premise.scope == GLOBAL)
@@ -274,7 +277,7 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_list)
 
     p = sub.add_parser("context", help="エージェントに読ませる、リポジトリごとの要約")
-    p.add_argument("--scope", required=True, help="owner/name")
+    p.add_argument("--scope", help="owner/name。省くと、作業ディレクトリの origin から決める")
     p.add_argument("--limit", type=int, default=30, help="見出しごとの件数の上限")
     p.set_defaults(func=cmd_context)
 

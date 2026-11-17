@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import socket
+import subprocess
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -57,3 +58,10 @@ def append_events(root: Path, events: list[Event]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as f:
             f.write(event.model_dump_json(exclude_none=True) + "\n")
+
+
+def scope_of(directory: Path) -> str | None:
+    """owner/name of the repository a directory belongs to, read from the URL of its origin remote."""
+    done = subprocess.run(["git", "remote", "get-url", "origin"], capture_output=True, text=True, cwd=directory)
+    found = re.search(r"[/:]([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?$", done.stdout.strip())
+    return f"{found[1]}/{found[2]}" if done.returncode == 0 and found else None
