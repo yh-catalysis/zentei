@@ -4,7 +4,7 @@
 
 記録は人が手で書きません。コーディングエージェントとの会話と、既存の意思決定ドキュメントから抜き出します。
 
-記録の形は [docs/01_Data_Model_Decision.md](docs/01_Data_Model_Decision.md) にあります。会話やドキュメントから抜き出す部分は、まだありません。
+記録の形は [docs/01_Data_Model_Decision.md](docs/01_Data_Model_Decision.md)、抜き出し方は [docs/02_Extraction_Decision.md](docs/02_Extraction_Decision.md) にあります。会話の履歴から抜き出す部分は、まだありません。
 
 ## 使い方
 
