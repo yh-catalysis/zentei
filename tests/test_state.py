@@ -1,4 +1,5 @@
 import json
+import subprocess
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -236,3 +237,23 @@ def test_context_points_to_shared_premises_in_a_repository_without_records(data,
     capsys.readouterr()
     assert cli.main(["context", "--scope", "x/y"]) == 0
     assert "zentei find" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["git@example.com:o/r.git", "https://example.com/o/r.git", "https://example.com/o/r", "ssh://git@example.com/o/r/"],
+)
+def test_scope_comes_from_the_origin_url(tmp_path, url):
+    assert store.scope_of(tmp_path) is None
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    assert store.scope_of(tmp_path) is None
+    subprocess.run(["git", "remote", "add", "origin", url], cwd=tmp_path, check=True)
+    assert store.scope_of(tmp_path) == "o/r"
+
+
+def test_context_outside_a_repository_prints_nothing(data, capsys, monkeypatch):
+    assert cli.main(["apply", write(data / "in.json", [{"type": "premise.added", "data": premise("pre_a")}])]) == 0
+    capsys.readouterr()
+    monkeypatch.chdir(data)
+    assert cli.main(["context"]) == 0
+    assert capsys.readouterr().out == ""
